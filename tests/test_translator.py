@@ -96,6 +96,10 @@ class TestTranslator(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.translator.get_supported_target_languages("")
 
+    def test_is_supported_pair(self):
+        self.assertFalse(self.translator.is_supported_pair("en", "en"))
+        self.assertTrue(self.translator.is_supported_pair("en", "yo"))
+
     def test_properties(self):
         self.assertIsInstance(self.translator.server, TranslatorsServer)
         self.assertIsInstance(self.translator.engine, Tse)
@@ -111,6 +115,8 @@ class TestTranslator(unittest.TestCase):
     def test_translate_file(self):
         translated_file = self.translator.translate_file("tests/fixtures/test_file.txt", "en", "yo")
         self.assertIsInstance(translated_file, IOBase)
+        with self.assertRaises(TranslationError):
+            self.translator.translate_file("", "en", "yo")
 
     def test_translate_markup(self):
         translated_markup = self.translator.translate_markup("<h1>Test</h1>", "en", "yo")

@@ -1,5 +1,5 @@
 """
-Translates text, markup content, BeautifulSoup objects and files using the `translators` package.
+Translate text, markup content, BeautifulSoup objects and files using the `translators` package.
 """
 
 import functools
@@ -64,8 +64,8 @@ class Translator:
 
     translator = tranzlate.Translator()
     text = "Yoruba is a language spoken in West Africa, most prominently Southwestern Nigeria."
-    translated_text = translator.translate(text, "en", "yo")
-    print(translated_text)
+    translation = translator.translate(text, "en", "yo")
+    print(translation)
 
     # Output: "Yorùbá jẹ́ èdè tí ó ń ṣe àwọn èdè ní ìlà oòrùn Áfríkà, tí ó wà ní orílẹ̀-èdè Gúúsù Áfríkà."
     ```
@@ -96,8 +96,8 @@ class Translator:
         return self._server
     
     @property
-    def engine(self) -> Tse | None:
-        """The translation engine used by the Translator instance"""
+    def engine(self) -> Tse:
+        """The translation engine (Tse) used by the Translator instance"""
         return getattr(self.server, f"_{self.engine_name}")
     
     @property
@@ -168,6 +168,18 @@ class Translator:
         if not src_lang:
             raise ValueError("Invalid value for `src_lang`")
         return self.language_map.get(src_lang, [])
+    
+
+    def is_supported_pair(self, src_lang: str, target_lang: str) -> bool:
+        """
+        Check if the source language and target language 
+        pair is supported by the translation engine.
+
+        :param src_lang (str): The source language.
+        :param target_lang (str): The target language.
+        :return: True if the pair is supported, False otherwise.
+        """
+        return src_lang != target_lang and target_lang in self.get_supported_target_languages(src_lang)
     
 
     def detect_language(self, _s: str) -> Dict:
@@ -262,8 +274,8 @@ class Translator:
 
         translator = tranzlate.Translator()
         text = "Yoruba is a language spoken in West Africa, most prominently Southwestern Nigeria."
-        translated_text = translator.translate(text, "en", "yo")
-        print(translated_text)
+        translation = translator.translate(text, "en", "yo")
+        print(translation)
 
         # Output: "Yorùbá jẹ́ èdè tí ó ń ṣe àwọn èdè ní ìlà oòrùn Áfríkà, tí ó wà ní orílẹ̀-èdè Gúúsù Áfríkà."
         '''
@@ -345,7 +357,7 @@ class Translator:
 
         Supported file types include: .txt, .csv, .doc, .docx, .pdf, .md..., mostly files with text content.
 
-        :param filepath (str): path to the file to be translated.
+        :param filepath (str): path to the file to be translated. If the file is empty, it is returned as is.
         :param src_lang (str, optional): Source language. Defaults to "auto".
         It is advisable to provide a source language to get more accurate translations.
         :param target_lang (str, optional): Target language. Defaults to "en".
@@ -370,7 +382,14 @@ class Translator:
         kwargs.pop('is_detail_result', None)
 
         kwargs_.update(kwargs)
-        file_handler = FileHandler(filepath, not_found_ok=False)
+        try:
+            file_handler = FileHandler(filepath, exists_ok=True, not_found_ok=False)
+        except Exception as exc:
+            raise TranslationError(f"Could not translate file") from exc
+        
+        if not file_handler.file_content:
+            return file_handler.file
+        
         try:
             if file_handler.filetype in ['xhtml', 'htm', 'shtml', 'html', 'xml']:
                 translated_content = self.translate_markup(file_handler.file_content, src_lang, target_lang, **kwargs_)
@@ -393,7 +412,7 @@ class Translator:
             **kwargs
         ):
         '''
-        Translates the text of a bs4.element.Tag object in place.
+        Translates the text of a bs4.element.Tag object 'in place'.
 
         NOTE: 
         * This function is not meant to be called directly. Use `translate_soup` instead.
