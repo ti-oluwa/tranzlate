@@ -4,7 +4,7 @@ Translates text, markup content, BeautifulSoup objects and files using the `tran
 
 import functools
 import sys
-from typing import Dict, List, Tuple
+from typing import Callable, Dict, List, Tuple
 from array import array
 import time
 import copy
@@ -13,19 +13,14 @@ from bs4 import BeautifulSoup
 from bs4.element import Tag
 from concurrent.futures import ThreadPoolExecutor
 try:
-    import translators as ts
     from translators.server import TranslatorsServer, tss, Tse
 except Exception as exc:
     raise ConnectionError(f"Could not import `translators` module: {exc}")
 
-from .file_handler import FileHandler
+from bs4_web_scraper.file_handler import FileHandler
 from .exceptions import TranslationError, UnsupportedLanguageError
 
 
-
-@functools.cache
-def get_translation_engines():
-    return ts.translators_pool
 
 _translatable_tags = (
     'h1', 'u', 's', 'abbr', 'del', 'pre', 'h5', 'sub', 'kbd', 'li', 
@@ -58,6 +53,22 @@ def _slice_iterable(iter: List | str | Tuple | array, slice_size: int):
 class Translator:
     """
     A Wrapper around the `TranslatorServer` class from the `translators` package by UlionTse.
+
+    Read more about the `translators` package here:
+    https://pypi.org/project/translators/
+
+    Usage Example:
+
+    ```python
+    import tranzlate
+
+    translator = tranzlate.Translator()
+    text = "Yoruba is a language spoken in West Africa, most prominently Southwestern Nigeria."
+    translated_text = translator.translate(text, "en", "yo")
+    print(translated_text)
+
+    # Output: "Yorùbá jẹ́ èdè tí ó ń ṣe àwọn èdè ní ìlà oòrùn Áfríkà, tí ó wà ní orílẹ̀-èdè Gúúsù Áfríkà."
+    ```
     """
     _server = tss
 
@@ -68,10 +79,10 @@ class Translator:
         :param engine (str): Name of translation engine to be used. Defaults to "bing"
         as it is proven to be the most reliable.
 
-        #### Call `get_translation_engines()` to get a list of supported translation engines.
+        #### Call `Translator.engines` to get a list of supported translation engines.
         """
-        if not engine in get_translation_engines():
-            raise ValueError(f"Invalid translation engine: {self.engine}")
+        if not engine in self.engines():
+            raise ValueError(f"Invalid translation engine: {engine}")
         self.engine_name = engine
         self._cache = {}
         return None
@@ -87,7 +98,12 @@ class Translator:
     @property
     def engine(self) -> Tse | None:
         """The translation engine used by the Translator instance"""
-        return getattr(self.server, f"_{self.engine_name}", None)
+        return getattr(self.server, f"_{self.engine_name}")
+    
+    @property
+    def engine_api(self) -> Callable:
+        """Method used by the translation engine to make translation requests"""
+        return getattr(self.server, f"{self.engine_name}")
     
     @property
     def input_limit(self) -> int:
@@ -103,59 +119,41 @@ class Translator:
         A dictionary containing a mapping of source language codes 
         to a list of target language codes that the translation engine can translate to.
         """
-        def _get_lang_map(text, src_lang, target_lang) -> Dict | None:
-            supported_langs = []
-            
-            try:
-                # Some translation engine require that you ping/test them 
-                # before you can obtain their language map
-                getattr(self.server, f"{self.engine_name}")(text, src_lang, target_lang)
+        try:
+            return self.server.get_languages(self.engine_name)
+        except:
+            return {}
 
-            except Exception as exc:
-                # If ping fails, usually because of wrong src and/or target lang codes, 
-                # the exception string usually contains, a list of the language map keys.
-                exc_str = str(exc)
-                # Parse out the list from the exception string.
-                try:
-                    supported_langs_str = exc_str.split(" in ")[1].strip().strip(".")
-                    supported_langs = list(eval(supported_langs_str))
-                except:
-                    pass
-
-                if not supported_langs:
-                    return None
-                
-                # Use the first two languages in the list as the src and target languages.
-                if len(supported_langs) >= 2:
-                    src_lang, target_lang = supported_langs[:2]
-                else:
-                    src_lang, target_lang = supported_langs[0], supported_langs[0]
-                # Retry with the new src and target languages.
-                return _get_lang_map(text, src_lang, target_lang)
-            
-            # If ping succeeds, get the language map.
-            lang_map = self.engine.language_map
-            if lang_map:
-                for key, value in lang_map.items():
-                    if isinstance(value, str):
-                        lang_map[key] = [value]
-                        continue
-                    lang_map[key] = list(value)
-
-            # If the language map is still empty, try to construct it from the list of supported languages.
-            if not lang_map and len(supported_langs) >= 2:
-                lang_map = { lang : supported_langs[index + 1 : index - 1] for index, lang in enumerate(supported_langs) }
-            return lang_map
-        
-        return _get_lang_map("Hello World", "en", "fr") or {}
-    
     @property
     def supported_languages(self):
         """
         Returns a list of language codes for source 
-        languages supported by the translation engine.
+        languages supported by the translator's engine.
         """
         return sorted(self.language_map.keys())
+    
+
+    @classmethod
+    def engines(cls):
+        """Returns a list of supported translation engines"""
+        return cls._server.translators_pool
+    
+    
+    def is_supported_language(self, lang_code: str):
+        '''
+        Check if the source language with the specified 
+        language code is supported by the translator's engine.
+        
+        :param lang_code (str): The language code for the language to check.
+        :return: True if the language is supported, False otherwise.
+        '''
+        if not isinstance(lang_code, str):
+            raise TypeError("Invalid type for `lang_code`")
+        lang_code = lang_code.strip().lower()
+        if not lang_code:
+            raise ValueError("`lang_code` cannot be empty")
+        
+        return lang_code in self.supported_languages
     
 
     def get_supported_target_languages(self, src_lang: str) -> List:
@@ -165,25 +163,11 @@ class Translator:
 
         :param src_lang (str): The source language for which to get supported target languages.
         """
+        if not isinstance(src_lang, str):
+            raise TypeError("Invalid type for `src_lang`")
         if not src_lang:
             raise ValueError("Invalid value for `src_lang`")
         return self.language_map.get(src_lang, [])
-    
-
-    @functools.lru_cache(maxsize=128)
-    def is_supported_language(self, lang_code: str):
-        '''
-        Check if the source language with the specified 
-        language code is supported by the translation engine.
-        
-        :param lang_code (str): The language code for the language to check.
-        :return: True if the language is supported, False otherwise.
-        '''
-        lang_code = lang_code.strip().lower()
-        if not lang_code:
-            raise ValueError("`lang_code` cannot be empty")
-        
-        return lang_code in self.supported_languages
     
 
     def detect_language(self, _s: str) -> Dict:
@@ -195,19 +179,40 @@ class Translator:
 
         bing is the preferred translation engine for this method as it works well for 
         this purpose. However, it is not guaranteed to work well always. 
+
+        Usage Example:
+        ```python
+        import tranzlate
+
+        translator = tranzlate.Translator()
+        text = "Yoruba is a language spoken in West Africa, most prominently Southwestern Nigeria."
+        detected_lang = translator.detect_language(text)
+        print(detected_lang)
+
+        # Output: {'language': 'en', 'score': 1.0}
+        ```
         """
+        if not isinstance(_s, str):
+            raise TypeError("Invalid type for `_s`")
+        if not _s:
+            raise ValueError("`_s` cannot be empty")
         try:
             result = self.server.translate_text(
                 query_text=_s, 
-                translator='bing', 
+                translator="bing", 
                 is_detail_result=True
             )
             return result.get('detectedLanguage', {}) if result else {}
-        except:
+        except Exception as exc:
+            sys.stderr.write(f"Error detecting language: {exc}\n")
             return {}
-        
-    
+
+
     def _check_lang_codes(self, src_lang: str, target_lang: str) -> None:
+        if not isinstance(src_lang, str):
+            raise TypeError("Invalid type for `src_lang`")
+        if not isinstance(target_lang, str):
+            raise TypeError("Invalid type for `target_lang`")
         if not src_lang:
             raise ValueError("A source language must be provided")
         if not target_lang:
@@ -247,10 +252,20 @@ class Translator:
         :param src_lang (str, optional): Source language. Defaults to "auto".
         It is advisable to provide a source language to get more accurate translations.
         :param target_lang (str, optional): Target language. Defaults to "en".
-        :param cache (bool, optional): Whether to cache translations. Defaults to True.
         :param is_markup (bool, optional): Whether `content` is markup. Defaults to False.
         :param **kwargs: Keyword arguments to be passed to required translation method.
         :return: Translated content.
+
+        Usage Example:
+        ```python
+        import tranzlate
+
+        translator = tranzlate.Translator()
+        text = "Yoruba is a language spoken in West Africa, most prominently Southwestern Nigeria."
+        translated_text = translator.translate(text, "en", "yo")
+        print(translated_text)
+
+        # Output: "Yorùbá jẹ́ èdè tí ó ń ṣe àwọn èdè ní ìlà oòrùn Áfríkà, tí ó wà ní orílẹ̀-èdè Gúúsù Áfríkà."
         '''
         if is_markup:
             return self.translate_markup(content, src_lang, target_lang, **kwargs)
@@ -291,23 +306,27 @@ class Translator:
             :kwarg lingvanex_model: str, default 'B2C'.
         :return: Translated text.
         '''
+        if not isinstance(text, str):
+            raise TypeError("Invalid type for `text`")
+        if not text:
+            raise ValueError("`text` cannot be empty")
+        
         self._check_lang_codes(src_lang, target_lang)
         kwargs_ = {'if_ignore_empty_query': True}
         kwargs_.update(kwargs)
 
         def _translate(text: str):
-            return self.server.translate_text(
+            return self.engine_api(
                 query_text=text, 
                 to_language=target_lang, 
                 from_language=src_lang, 
-                translator=self.engine_name, 
                 **kwargs_
             )
         
         try:
-            chunks = _slice_iterable(text, self.input_limit)
-            translated_contents = list(map(_translate, chunks))
-            translated_text = "".join(translated_contents)   
+            chunks = _slice_iterable(text, self.input_limit - 1)
+            translated_chunks = list(map(_translate, chunks))
+            translated_text = "".join(translated_chunks)   
             return translated_text
         
         except Exception as exc:
@@ -352,13 +371,11 @@ class Translator:
 
         kwargs_.update(kwargs)
         file_handler = FileHandler(filepath, not_found_ok=False)
-        content = file_handler.file_content
-
         try:
             if file_handler.filetype in ['xhtml', 'htm', 'shtml', 'html', 'xml']:
-                translated_content = self.translate_markup(content, src_lang, target_lang, **kwargs_)
+                translated_content = self.translate_markup(file_handler.file_content, src_lang, target_lang, **kwargs_)
             else:
-                translated_content = self.translate_text(content, src_lang, target_lang, **kwargs_)
+                translated_content = self.translate_text(file_handler.file_content, src_lang, target_lang, **kwargs_)
 
             file_handler.write_to_file(translated_content, write_mode='w+')
             file_handler.close_file()
@@ -449,7 +466,7 @@ class Translator:
         translatables = list(filter(lambda el: bool(el.string), translatables))
         if thread:
             with ThreadPoolExecutor() as executor:
-                for tag_list in utils.slice_iterable(translatables, 50):
+                for tag_list in _slice_iterable(translatables, 50):
                     _ = executor.map(
                         lambda tag: self._translate_soup_tag(tag, src_lang, target_lang, **kwargs), 
                         tag_list
