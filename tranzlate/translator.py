@@ -12,10 +12,7 @@ import random
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 from concurrent.futures import ThreadPoolExecutor
-try:
-    from translators.server import TranslatorsServer, tss, Tse
-except Exception as exc:
-    raise ConnectionError(f"Could not import `translators` module: {exc}")
+from translators.server import TranslatorsServer, tss, Tse
 
 from bs4_web_scraper.file_handler import FileHandler
 from .exceptions import TranslationError, UnsupportedLanguageError
@@ -280,13 +277,28 @@ class Translator:
         # Output: "Yorùbá jẹ́ èdè tí ó ń ṣe àwọn èdè ní ìlà oòrùn Áfríkà, tí ó wà ní orílẹ̀-èdè Gúúsù Áfríkà."
         '''
         if is_markup:
-            return self.translate_markup(content, src_lang, target_lang, **kwargs)
+            return self.translate_markup(
+                markup=content, 
+                src_lang=src_lang, 
+                target_lang=target_lang, 
+                **kwargs
+            )
         elif isinstance(content, BeautifulSoup):
-            return self.translate_soup(content, src_lang, target_lang, **kwargs)
-        return self.translate_text(content, src_lang, target_lang, **kwargs)
+            return self.translate_soup(
+                soup=content, 
+                src_lang=src_lang, 
+                target_lang=target_lang, 
+                **kwargs
+            )
+        return self.translate_text(
+            text=content, 
+            src_lang=src_lang, 
+            target_lang=target_lang, 
+            **kwargs
+        )
 
     
-    @functools.cache
+    # @functools.cache
     def translate_text(
             self, 
             text: str, 
@@ -405,7 +417,7 @@ class Translator:
 
     def _translate_soup_tag(
             self, 
-            element: Tag, 
+            tag: Tag, 
             src_lang: str = "auto", 
             target_lang: str = "en", 
             _ct: int = 0,
@@ -420,41 +432,41 @@ class Translator:
         * This function modifies the element in place.
         * Translations are cached by default to avoid repeated translations which can be costly.
 
-        :param element (bs4.element.Tag): The element whose text is to be translated.
+        :param element (bs4.element.Tag): The tag whose text content is to be translated.
         :param src_lang (str, optional): Source language. Defaults to "auto".
         :param target_lang (str, optional): Target language. Defaults to "en".
         :param _ct (int, optional): The number of times the function has been called recursively. Defaults to 0.
         Do not pass this argument manually.
         '''
-        if not isinstance(element, Tag):
-            raise TypeError("Invalid type for `element`")
+        if not isinstance(tag, Tag):
+            raise TypeError("Invalid type for `tag`")
         if not isinstance(_ct, int):
             raise TypeError("Invalid type for `_ct`")
 
-        if element.string and element.string.strip():
-            initial_string = copy.copy(element.string)
-            cached_translation = self._cache.get(element.string, None)
+        if tag.string and tag.string.strip():
+            initial_string = copy.copy(tag.string)
+            cached_translation = self._cache.get(tag.string, None)
             if cached_translation:
-                element.string.replace_with(cached_translation)
+                tag.string.replace_with(cached_translation)
             else:
                 try:
                     translation = self.translate_text(
-                        text=element.string, 
+                        text=tag.string, 
                         src_lang=src_lang, 
                         target_lang=target_lang,
                         **kwargs
                     )
-                    element.string.replace_with(translation)
+                    tag.string.replace_with(translation)
 
                 except Exception as exc:
-                    error_ = TranslationError(f"Error translating element: {exc}")
+                    error_ = TranslationError(f"Error translating tag: {exc}")
                     sys.stderr.write(f"{error_}\n")
                     # try again
                     _ct += 1
                     # prevents the translation engine from blocking our IP address
                     time.sleep(random.random(2, 5) * _ct)
                     if _ct <= 3:
-                        return self._translate_soup_tag(element, src_lang, target_lang, _ct, **kwargs)
+                        return self._translate_soup_tag(tag, src_lang, target_lang, _ct, **kwargs)
                 finally:
                     self._cache[initial_string] = translation
         return None
