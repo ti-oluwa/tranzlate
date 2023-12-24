@@ -1,4 +1,4 @@
-### tranzlate
+## tranzlate
 
 A wrapper around the translators package by UlionTse that enables multilingual translation of text, files, markup and BeautifulSoup objects.
 
@@ -125,6 +125,10 @@ To use a proxy, simply pass the proxy to the `Translator` class on instantiation
 ```python
 import tranzlate
 
+translator = tranzlate.Translator()
+text = 'Good Morning!'
+translation = translator.translate(text, target_lang='yo', proxies={'https': 'https://<proxy>:<port>'})
+print(translation)
 ```
 
 ### Other Methods
@@ -162,7 +166,7 @@ To check if a language pair is supported by the translator's engine:
 import tranzlate
 
 translator = tranzlate.Translator()
-is_supported = translator.is_supported_pair('en', 'yo')
+is_supported = translator.is_supported_pair(src_lang='en', target_lang='yo')
 print(is_supported)
 
 # Output: True
