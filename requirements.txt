@@ -1,3 +1,3 @@
-translators
-bs4
-bs4_web_scraper
+translators==5.8.9
+beautifulsoup4==4.12.2
+simple_file_handler>=0.0.1

@@ -1,10 +1,9 @@
 """
 Translate text, markup content, BeautifulSoup objects and files using the `translators` package.
 """
-
 import functools
 import sys
-from typing import Callable, Dict, List, Tuple
+from typing import Callable, Dict, List, Tuple, IO
 from array import array
 import time
 import copy
@@ -13,8 +12,8 @@ from bs4 import BeautifulSoup
 from bs4.element import Tag
 from concurrent.futures import ThreadPoolExecutor
 from translators.server import TranslatorsServer, tss, Tse
+import simple_file_handler as sfh
 
-from bs4_web_scraper.file_handler import FileHandler
 from .exceptions import TranslationError, UnsupportedLanguageError
 
 
@@ -86,7 +85,7 @@ class Translator:
 
 
     @property
-    def server(self):
+    def server(self) -> TranslatorsServer:
         """The translation server used by the Translator instance"""
         if not isinstance(self._server, TranslatorsServer):
             raise TypeError("Invalid type for `_server`")
@@ -122,7 +121,7 @@ class Translator:
             return {}
 
     @property
-    def supported_languages(self):
+    def supported_languages(self) -> List:
         """
         Returns a list of language codes for source 
         languages supported by the translator's engine.
@@ -131,12 +130,12 @@ class Translator:
     
 
     @classmethod
-    def engines(cls):
+    def engines(cls) -> List[str]:
         """Returns a list of supported translation engines"""
         return cls._server.translators_pool
     
     
-    def is_supported_language(self, lang_code: str):
+    def is_supported_language(self, lang_code: str) -> bool:
         '''
         Check if the source language with the specified 
         language code is supported by the translator's engine.
@@ -252,8 +251,9 @@ class Translator:
             src_lang: str = "auto", 
             target_lang: str = "en", 
             is_markup: bool = False, 
+            encoding: str = "utf-8",
             **kwargs
-        ):
+        ) -> str | bytes | BeautifulSoup:
         '''
         Translate content from source language to target language.
 
@@ -262,6 +262,7 @@ class Translator:
         It is advisable to provide a source language to get more accurate translations.
         :param target_lang (str, optional): Target language. Defaults to "en".
         :param is_markup (bool, optional): Whether `content` is markup. Defaults to False.
+        :param encoding (str, optional): The encoding of the content (for bytes content only). Defaults to "utf-8".
         :param **kwargs: Keyword arguments to be passed to required translation method.
         :return: Translated content.
 
@@ -276,11 +277,13 @@ class Translator:
 
         # Output: "Yorùbá jẹ́ èdè tí ó ń ṣe àwọn èdè ní ìlà oòrùn Áfríkà, tí ó wà ní orílẹ̀-èdè Gúúsù Áfríkà."
         '''
+        is_bytes = isinstance(content, bytes)
         if is_markup:
             return self.translate_markup(
                 markup=content, 
                 src_lang=src_lang, 
-                target_lang=target_lang, 
+                target_lang=target_lang,
+                encoding=encoding, 
                 **kwargs
             )
         elif isinstance(content, BeautifulSoup):
@@ -290,12 +293,14 @@ class Translator:
                 target_lang=target_lang, 
                 **kwargs
             )
-        return self.translate_text(
-            text=content, 
+        
+        translation = self.translate_text(
+            text=content.decode(encoding) if is_bytes else content, 
             src_lang=src_lang, 
             target_lang=target_lang, 
             **kwargs
         )
+        return translation.encode(encoding) if is_bytes else translation
 
     
     # @functools.cache
@@ -305,7 +310,7 @@ class Translator:
             src_lang: str="auto", 
             target_lang: str="en", 
             **kwargs
-        ) -> str | Dict:
+        ) -> str:
         '''
         Translate text from `src_lang` to `target_lang`.
 
@@ -337,6 +342,7 @@ class Translator:
         
         self._check_lang_codes(src_lang, target_lang)
         kwargs_ = {'if_ignore_empty_query': True}
+        kwargs.pop('is_detail_result', None)
         kwargs_.update(kwargs)
 
         def _translate(text: str):
@@ -363,7 +369,7 @@ class Translator:
             src_lang: str="auto", 
             target_lang: str="en", 
             **kwargs
-        ):
+        ) -> IO:
         '''
         Translates file from `src_lang` to `target_lang`.
 
@@ -392,27 +398,25 @@ class Translator:
         self._check_lang_codes(src_lang, target_lang)
         kwargs_ = {'if_ignore_empty_query': True}
         kwargs.pop('is_detail_result', None)
-
         kwargs_.update(kwargs)
-        try:
-            file_handler = FileHandler(filepath, exists_ok=True, not_found_ok=False)
-        except Exception as exc:
-            raise TranslationError(f"Could not translate file") from exc
-        
-        if not file_handler.file_content:
-            return file_handler.file
-        
-        try:
-            if file_handler.filetype in ['xhtml', 'htm', 'shtml', 'html', 'xml']:
-                translated_content = self.translate_markup(file_handler.file_content, src_lang, target_lang, **kwargs_)
-            else:
-                translated_content = self.translate_text(file_handler.file_content, src_lang, target_lang, **kwargs_)
 
-            file_handler.write_to_file(translated_content, write_mode='w+')
-            file_handler.close_file()
-            return file_handler.file
+        try:
+            with sfh.FileHandler(filepath, exists_ok=True, not_found_ok=False) as file_handler:
+                content = file_handler.file_content
+                if not content:
+                    return file_handler.file
+                
+                if file_handler.filetype in ['xhtml', 'htm', 'shtml', 'html', 'xml']:
+                    translation = self.translate_markup(content, src_lang, target_lang, **kwargs_)
+                else:
+                    translation = self.translate_text(content, src_lang, target_lang, **kwargs_)
+
+                file_handler.write_to_file(translation, write_mode='w+')
+                return file_handler.file
         except Exception as exc:
-            raise TranslationError(f"File cannot be translated. {exc}")
+            raise TranslationError(
+                "File cannot be translated."
+            ) from exc
 
 
     def _translate_soup_tag(
@@ -464,7 +468,7 @@ class Translator:
                     # try again
                     _ct += 1
                     # prevents the translation engine from blocking our IP address
-                    time.sleep(random.random(2, 5) * _ct)
+                    time.sleep(random.random(2, 4) * _ct)
                     if _ct <= 3:
                         return self._translate_soup_tag(tag, src_lang, target_lang, _ct, **kwargs)
                 finally:
@@ -479,7 +483,7 @@ class Translator:
             target_lang: str = "en", 
             thread: bool = True, 
             **kwargs
-        ):
+        ) -> BeautifulSoup:
         '''
         Translates the text of a BeautifulSoup object.
 
@@ -512,17 +516,21 @@ class Translator:
     def translate_markup(
             self, 
             markup: str | bytes, 
-            src_lang: str="auto", 
-            target_lang: str="en", 
+            src_lang: str = "auto", 
+            target_lang: str = "en",
+            markup_parser: str = "lxml",
+            encoding: str = "utf-8",
             **kwargs
-        ):
+        ) -> str | bytes:
         '''
-        Translates markup.
+        Translates markup (html, xml, etc.)
 
         :param markup (str | bytes): markup content to be translated
         :param src_lang (str, optional): Source language. Defaults to "auto".
         It is advisable to provide a source language to get more accurate translations.
         :param target_lang (str, optional): Target language. Defaults to "en".
+        :param markup_parser (str, optional): The (beautifulsoup) markup parser to use. Defaults to "lxml".
+        :param encoding (str, optional): The encoding of the markup (for bytes markup only). Defaults to "utf-8".
         :param **kwargs: Keyword arguments to be passed to the `translate_soup` method.
             :kwarg thread: bool, default True.
             :kwarg professional_field: str, support baidu(), caiyun(), alibaba() only.
@@ -542,12 +550,9 @@ class Translator:
         '''
         if not isinstance(markup, (str, bytes)):
             raise TypeError("Invalid type for `markup`")
+        
         is_bytes = isinstance(markup, bytes)
         kwargs.pop('is_detail_result', None)
-        soup = BeautifulSoup(markup, 'lxml')
+        soup = BeautifulSoup(markup, markup_parser, from_encoding=encoding if is_bytes else None)
         translated_markup = self.translate_soup(soup, src_lang, target_lang, **kwargs).prettify()
-
-        # re-encode the markup if the initial markup was in bytes
-        if is_bytes:
-            translated_markup = translated_markup.encode('utf-8')
-        return translated_markup
+        return translated_markup.encode('utf-8') if is_bytes else translated_markup
