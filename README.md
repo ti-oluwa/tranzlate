@@ -84,7 +84,7 @@ import tranzlate
 translator = tranzlate.Translator()
 
 markup = '<p>Good Morning!</p>'
-translated_markup = translator.translate(markup, target_lang='yo')
+translated_markup = translator.translate(markup, target_lang='yo', is_markup=True)
 print(translated_markup)
 
 # Output: <p>Eku ojumo!</p>

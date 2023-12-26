@@ -136,4 +136,4 @@ class TestTranslator(unittest.TestCase):
 if "__name__" == "__main__":
     unittest.main()
 
-# RUN WITH 'python -m unittest discover tests "test_*.py"' from project directory
+# RUN WITH 'python -m unittest discover tests "test_*.py"' from project's root directory
