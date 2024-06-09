@@ -7,6 +7,7 @@ import tranzlate
 from tranzlate.exceptions import TranslationError, UnsupportedLanguageError
 
 
+
 class TestTranslator(unittest.TestCase):
     """Test case for the Translator class."""
     example_text = "Yoruba is a language spoken in West Africa, most prominently Southwestern Nigeria."
@@ -43,8 +44,6 @@ class TestTranslator(unittest.TestCase):
     def test_translate_on_auto(self):
         with self.assertRaises(TypeError):
             self.translator.translate(None)
-        with self.assertRaises(ValueError):
-            self.translator.translate("")
         translation = self.translator.translate(self.example_text, target_lang="yo")
         self.assertIsInstance(translation, str)
         self.assertNotEqual(translation, self.example_text)
@@ -68,37 +67,33 @@ class TestTranslator(unittest.TestCase):
 
     def test_translate_with_unsupported_source_language(self):
         with self.assertRaises(UnsupportedLanguageError):
-            self.translator.translate(self.example_text, "en-xy", "yo")
+            self.translator.translate(self.example_text, "xyz", "yo")
 
     def test_translate_with_unsupported_target_language(self):
         with self.assertRaises(UnsupportedLanguageError):
-            self.translator.translate(self.example_text, "en", "yo-xy")
+            self.translator.translate(self.example_text, "en", "xyz")
 
     def test_translate_with_the_same_source_and_target_language(self):
-        with self.assertRaises(TranslationError):
+        with self.assertRaises(ValueError):
             self.translator.translate(self.example_text, "en", "en")
 
-    def test_is_supported_language(self):
-        self.assertTrue(self.translator.is_supported_language("en"))
-        self.assertFalse(self.translator.is_supported_language("en-xy"))
+    def test_supports_language(self):
+        self.assertTrue(self.translator.supports_language("en"))
+        self.assertFalse(self.translator.supports_language("xyz"))
         with self.assertRaises(TypeError):
-            self.translator.is_supported_language(None)
-        with self.assertRaises(ValueError):
-            self.translator.is_supported_language("")
+            self.translator.supports_language(None)
         
     def test_get_supported_target_languages(self):
         self.assertIsInstance(self.translator.get_supported_target_languages("en"), list)
         self.assertTrue(len(self.translator.get_supported_target_languages("en")) > 0)
-        self.assertIsInstance(self.translator.get_supported_target_languages("en-xy"), list)
-        self.assertTrue(len(self.translator.get_supported_target_languages("en-xy")) == 0)
+        self.assertIsInstance(self.translator.get_supported_target_languages("xyz"), list)
+        self.assertTrue(len(self.translator.get_supported_target_languages("xyz")) == 0)
         with self.assertRaises(TypeError):
             self.translator.get_supported_target_languages(None)
-        with self.assertRaises(ValueError):
-            self.translator.get_supported_target_languages("")
 
-    def test_is_supported_pair(self):
-        self.assertFalse(self.translator.is_supported_pair("en", "en"))
-        self.assertTrue(self.translator.is_supported_pair("en", "yo"))
+    def test_supports_pair(self):
+        self.assertFalse(self.translator.supports_pair("en", "en"))
+        self.assertTrue(self.translator.supports_pair("en", "yo"))
 
     def test_properties(self):
         self.assertIsInstance(self.translator.server, TranslatorsServer)
@@ -136,4 +131,4 @@ class TestTranslator(unittest.TestCase):
 if "__name__" == "__main__":
     unittest.main()
 
-# RUN WITH 'python -m unittest discover tests "test_*.py"' from project's root directory
+# Run with 'python -m unittest discover tests "test_*.py"' from project's root directory

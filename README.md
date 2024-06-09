@@ -1,6 +1,6 @@
 ## tranzlate
 
-A wrapper around the translators package by UlionTse that enables multilingual translation of text, files, markup and BeautifulSoup objects.
+A wrapper around the [`translators`](https://pypi.org/project/translators/) package, providing a simpler interface for the translation of text, files, markup and BeautifulSoup.
 
 ## Installation
 
@@ -12,9 +12,11 @@ pip install tranzlate
 
 ## Usage
 
-### Create a Translator
+> Ensure you have `beautifulsoup4` installed if you want to translate markup or BeautifulSoup. Run `pip install beautifulsoup4` in your terminal.
 
-The `Translator` class is the main interface for the package. It can be used to translate text, files, markup and BeautifulSoup objects. To create an instance of the `Translator` class, simply import the `tranzlate` package and instantiate the `Translator` class:
+### Create a translator
+
+The `Translator` class is the main interface for the package. It can be used to translate text, bytes, files, markup and BeautifulSoup. To create an instance of the `Translator` class, simply import the `tranzlate` package and instantiate a `Translator`:
 
 ```python
 import tranzlate
@@ -22,7 +24,7 @@ import tranzlate
 translator = tranzlate.Translator()
 ```
 
-### Use a Custom Translation Engine
+### Use a custom translation engine
 
 By default, the `Translator` class uses Bing Translator as its translation engine. Based on test results, Bing is the most reliable translation engine. However, you can use any translation engine that is supported by the translators package by passing the name of the engine to the `Translator` class on instantiation:
 
@@ -31,7 +33,7 @@ In this example, we will use Google Translate as our translation engine:
 ```python
 import tranzlate
 
-translator = tranzlate.Translator('google')
+google = tranzlate.Translator('google')
 ```
 
 To get a list of all supported translation engines:
@@ -45,148 +47,140 @@ print(tranzlate.Translator.engines())
 # ['bing', 'google', 'yandex', 'baidu', 'sogou', 'tencent', 'deepl', 'alibaba', ...]
 ```
 
-### Detect Language
+### Detect language
 
 ```python
 import tranzlate
 
-translator = tranzlate.Translator()
 text = 'Good Morning!'
-detected_lang = translator.detect_language(text)
-print(detected_lang)
+language = tranzlate.Translator.detect_language(text)
+print(language)
 
 # Output: en
 ```
 
-### Translate Text, Markup and BeautifulSoup Objects
+### Translate text, bytes, markup and BeautifulSoup
 
-To translate text, markup or a soup, you can use the `translate` method of the `Translator` class. The `translate` method is a general purpose method that can be used to translate text, markup and BeautifulSoup objects.
+Translate text, markup or a soup using the `translate` method of the `Translator` class. The `translate` method is a general purpose method that can be used to translate text, bytes and markup.
 
-#### Translate Text
+#### Translate text/bytes
 
 ```python
 import tranzlate
 
-translator = tranzlate.Translator()
-
+bing = tranzlate.Translator("bing")
 text = 'Good Morning!'
-translation = translator.translate(text, target_lang='yo')
+translation = bing.translate(text, target_lang='yo')
 print(translation)
 
 # Output: Eku ojumo!
 ```
 
-#### Translate Markup
+#### Translate markup
 
 ```python
 import tranzlate
 
-translator = tranzlate.Translator()
+bing = tranzlate.Translator("bing")
 
 markup = '<p>Good Morning!</p>'
-translated_markup = translator.translate(markup, target_lang='yo', is_markup=True)
+translated_markup = bing.translate(markup, target_lang='yo', is_markup=True)
 print(translated_markup)
 
 # Output: <p>Eku ojumo!</p>
 ```
 
-#### Translate BeautifulSoup Objects
+#### Translate BeautifulSoup
 
 ```python
 import tranzlate
 from bs4 import BeautifulSoup
 
-translator = tranzlate.Translator()
-
+baidu = tranzlate.Translator("baidu")
 markup = '<p>Good Morning!</p>'
 soup = BeautifulSoup(markup, 'html.parser')
-translated_soup = translator.translate(soup, target_lang='yo')
+translated_soup = baidu.translate_soup(soup, target_lang='fr')
 ```
 
 However, there are specialized methods for translating text, markup and BeautifulSoup objects. These methods are `translate_text`, `translate_markup` and `translate_soup` respectively.
 
-### Translate Files
+### Translate files
 
-To translate files, we use the `translate_file` method of the `Translator` class.
+To translate files, we use the `translate_file` method.
 
 ```python
 import tranzlate
 
-translator = tranzlate.Translator()
-translated_file = translator.translate_file('path/to/file.txt', src_lang="en", target_lang='yo')
+bing = tranzlate.Translator() # Bing is used by default
+translated_file = bing.translate_file('path/to/file.txt', src_lang="en", target_lang='yo')
 ```
 
 It is advisable to specify the source language when performing translations as it helps the translation engine to provide more accurate translations.
 
-### Use a Proxy
+### Use a proxy
 
-To use a proxy, simply pass the proxy to the `Translator` class on instantiation:
+To use a proxy, simply pass your proxies on translation:
 
 ```python
 import tranzlate
 
-translator = tranzlate.Translator()
+deepl = tranzlate.Translator("deepl")
 text = 'Good Morning!'
-translation = translator.translate(text, target_lang='yo', proxies={'https': 'https://<proxy>:<port>'})
+translation = deepl.translate(text, target_lang='yo', proxies={'https': 'https://<proxy>:<port>'})
 print(translation)
 ```
 
-### Other Methods
-
-#### Get Supported Languages
-
-To get a list of all supported (source) languages by the translator's engine:
+### Other methods
 
 ```python
 import tranzlate
 
-translator = tranzlate.Translator()
-print(translator.supported_languages)
+google = tranzlate.Translator("google")
+bing = tranzlate.Translator("bing")
 ```
 
-#### Check if a Language is Supported
+#### Get supported languages
 
-To check if a (source) language is supported by the translator's engine:
+Get a list of all supported (source) languages by the translator's engine:
 
 ```python
-import tranzlate
+print(google.supported_languages)
+```
 
-translator = tranzlate.Translator()
-is_supported = translator.is_supported_language('yo')
+#### Check if a language is supported
+
+Check if a (source) language is supported by the translator's engine:
+
+```python
+is_supported = google.supports_language('yo')
 print(is_supported)
 
 # Output: True
 ```
 
-#### Check if a Language Pair is Supported
+#### Check if a language pair is supported
 
-To check if a language pair is supported by the translator's engine:
+Check if a language pair is supported by the translator's engine:
 
 ```python
-import tranzlate
-
-translator = tranzlate.Translator()
-is_supported = translator.is_supported_pair(src_lang='en', target_lang='yo')
+is_supported = bing.supports_pair(src_lang='en', target_lang='yo')
 print(is_supported)
 
 # Output: True
 ```
 
-#### Get a List of Supported Target Languages for a Source Language
+#### Get a list of supported target languages for a source language
 
-To get a list of supported target languages for a source language:
+Get a list of supported target languages for a source language:
 
 ```python
-import tranzlate
-
-translator = tranzlate.Translator()
-supported_target_languages = translator.get_supported_target_languages('en')
+supported_target_languages = bing.get_supported_target_languages('en')
 print(supported_target_languages)
 ```
 
 ### Testing
 
-To run the tests, simply run the following command in the root directory of your cloned repository:
+To run tests, simply run the following command in the root directory of your cloned repository:
 
 ```bash
 python -m unittest discover tests "test_*.py"
