@@ -1,13 +1,12 @@
 """
 #### tranzlate
 
-Simple python package for multi-lingual translation of text, files, markup and BeautifulSoup objects.
+Translate text, files, markup and BeautifulSoup.
 
 @Author: Daniel T. Afolayan (ti-oluwa.github.io)
 """
 
-from .translator import Translator
+from .translator import Translator, add_translatable_html_tag
 
-__all__ = ["Translator"]
-__version__ = "0.0.1"
-__author__ = "Daniel T. Afolayan"
+__all__ = ["Translator", "add_translatable_html_tag"]
+__version__ = "0.0.2"
