@@ -1,2 +1,3 @@
 translators==5.8.9
 simple_file_handler>=0.0.1
+asgiref==3.8.1
